@@ -40,6 +40,17 @@ class ContextWrapper:
                 return self.thread.tag("result", result)
         return wrapped
 
+# iterator wrappers segment usage of an iterator with individual contexts
+class IteratorWrapper:
+    def __init__(self, iterator, region, thread):
+        def gen():
+            for value in iterator:
+                with thread.context(region):
+                    yield value
+        self._iterator = gen()
+    def __iter__(self):
+        return self._iterator    
+
 # primary means of interface is with Thread objects
 class Thread:
     # threads require an entity to be named - safe bet is the name of the file
@@ -60,6 +71,8 @@ class Thread:
         self._log.log(self.level, VALUE_MESSAGE, {"id": id, "value": Value(value)})
     def context(self, region):
         return ContextWrapper(region, self)
+    def iterate(self, iterator, region):
+        return IteratorWrapper(iterator, region, self)
 
     # termination takes no arguments
     def terminate(self):
