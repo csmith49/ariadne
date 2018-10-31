@@ -8,7 +8,7 @@ INIT_MESSAGE = "INIT"
 TERMINATE_MESSAGE = "TERMINATE"
 VALUE_MESSAGE = "VALUE|%(id)s|%(value)s"
 
-# our log level is just above info
+# our default log level is just above info
 LOG_LEVEL = 21
 
 # wrapper for formatting values - rep taken from THREAD documentation
