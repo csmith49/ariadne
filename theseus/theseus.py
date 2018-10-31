@@ -1,19 +1,17 @@
 import time
 import logging
 
-# the logger by which theseus emits messages
-log = logging.getLogger(__name__)
+# message formats - taken from THREAD documentation
+OPEN_MESSAGE = "OPEN|%(region)s"
+CLOSE_MESSAGE = "CLOSE|%(region)s"
+INIT_MESSAGE = "INIT"
+TERMINATE_MESSAGE = "TERMINATE"
+VALUE_MESSAGE = "VALUE|%(id)s|%(value)s"
 
-# default initialization for log
-log.addHandler(logging.NullHandler())
+# our log level is just above info
+LOG_LEVEL = 21
 
-# base message formats
-OPEN_MSG = "OPEN|%(region)s"
-CLOSE_MSG = "CLOSE|%(region)s"
-INIT_MSG = "INIT"
-VALUE_MSG = "VALUE|%(id)s|%(value)s"
-
-# value representation
+# wrapper for formatting values - rep taken from THREAD documentation
 class Value:
     def __init__(self, value):
         self.value = value
@@ -23,37 +21,60 @@ class Value:
         elif isinstance(self.value, int):
             return f"{{INT:{self.value}}}"
         else:
-            return f"{{STRING:{self.value}}}"    
+            return f"{{STRING:{self.value}}}"
 
-# minimal annotations
-def tag(id, value):
-    log.debug(VALUE_MSG, {"id": id, "value": Value(value)})
-    return value
-
+# context wrappers ensure open and closed called appropriately
 class ContextWrapper:
-    def __init__(self, region):
+    def __init__(self, region, thread):
         self.region = region
+        self.thread = thread
     def __enter__(self):
-        log.debug(OPEN_MSG, {"region": self.region})
+        self.thread.open(self.region)
     def __exit__(self, *args, **kwargs):
-        log.debug(CLOSE_MSG, {"region": self.region})
+        self.thread.close(self.region)
+    # enables decorator usage
     def __call__(self, func):
         def wrapped(*args, **kwargs):
             with self:
                 result = func(*args, **kwargs)
-                return tag("result", result)
+                return self.thread.tag("result", result)
         return wrapped
 
-def context(region):
-    return ContextWrapper(region)
+# primary means of interface is with Thread objects
+class Thread:
+    # threads require an entity to be named - safe bet is the name of the file
+    def __init__(self, entity, level=LOG_LEVEL):
+        self.entity = entity
+        self.level = level
+        self._log = logging.getLogger(entity)
+        self._formatter = logging.Formatter(f"THREAD|{entity}|%(relativeCreated)d|%(message)s")
+        # make sure log has a handler by default
+        self._log.addHandler(logging.NullHandler())
+    
+    # the basic interface
+    def open(self, region):
+        self._log.log(self.level, OPEN_MESSAGE, {"region": region})
+    def close(self, region):
+        self._log.log(self.level, CLOSE_MESSAGE, {"region": region})
+    def tag(self, id, value):
+        self._log.log(self.level, VALUE_MESSAGE, {"id": id, "value": Value(value)})
+    def context(self, region):
+        return ContextWrapper(region, self)
 
-# initialization - without this, nothing really happens
-def initialize(target):
-    logging.basicConfig(level=logging.DEBUG)
-    # simply, we write out to target file
-    handler = logging.FileHandler(target)
-    # formatter = logging.Formatter(datefmt="%(created)f")
-    # the handler uses a simplified formatter
-    # handler.setFormatter(formatter)
-    log.addHandler(handler)
-    log.debug(INIT_MSG)
+    # termination takes no arguments
+    def terminate(self):
+        self._log.log(self.level, TERMINATE_MESSAGE)
+    
+    # initialization configures the logger destination - currently only handles files
+    def initialize(self, target):
+        # construct a handler for all messages emitted from this thread
+        handler = logging.FileHandler(target)
+        handler.setFormatter(self._formatter)
+        handler.setLevel(self.level)
+
+        # configure the log to use the appropriate handler
+        self._log.addHandler(handler)
+        self._log.setLevel(self.level)
+
+        # and finally emit the init message
+        self._log.log(self.level, INIT_MESSAGE)

@@ -1,1 +1,1 @@
-from .theseus import initialize, tag, context
+from .theseus import Thread

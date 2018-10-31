@@ -1,10 +1,14 @@
 import theseus
+import time
 
-theseus.initialize("thread.log")
+thread = theseus.Thread("usage1")
+thread.initialize("thread.log")
 
-with theseus.context("loop"):
+with thread.context("loop"):
     for i in range(1, 10):
-        with theseus.context("body"):
-            theseus.tag("counter", i)
-        with theseus.context("body2"):
+        with thread.context("body"):
+            thread.tag("counter", i)
+        with thread.context("body2"):
             print(i)
+
+thread.terminate()
